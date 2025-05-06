@@ -119,11 +119,8 @@ func (pdb *Database) ExecuteConstructor(qc QueryConstructor, params ...any) (sql
 	var stmt *sql.Stmt
 	var ok bool
 	var err error
-	if err != nil {
-		return nil, err
-	}
 	if stmt, ok = pdb.prepStmts[reflect.TypeOf(qc).Name()]; !ok {
-		stmt, err = pdb.DB.Prepare(qc.Construct())
+		stmt, err = pdb.Prepare(qc.Construct())
 		if err != nil {
 			return nil, fmt.Errorf("statement construction error:%w", err)
 		}

@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	internErrs "github.com/ivanehh/go-boiler-lib/internal/errors"
 	"github.com/pbnjay/grate"
 	_ "github.com/pbnjay/grate/simple"
 	_ "github.com/pbnjay/grate/xls"
@@ -156,7 +155,7 @@ func recordsFromFiles(filePaths []string) DataframeOpt {
 						if strings.Contains(r[0], ",") {
 							if record = d.CleanerFunc(strings.Split(r[0], ",")); len(record) > 0 {
 								if slices.Compare(head, record) != 0 {
-									return &internErrs.HeaderMismatchErr{
+									return &HeaderMismatchErr{
 										Original: head,
 										Mismatch: record,
 									}
@@ -165,7 +164,7 @@ func recordsFromFiles(filePaths []string) DataframeOpt {
 						} else { // this part is for excel files
 							if record = d.CleanerFunc(r); len(record) > 0 {
 								if slices.Compare(head, record) != 0 {
-									return &internErrs.HeaderMismatchErr{
+									return &HeaderMismatchErr{
 										Original: head,
 										Mismatch: record,
 									}
@@ -214,7 +213,7 @@ func recordsFromFiles(filePaths []string) DataframeOpt {
 func WithProvidedColumns(h []string) DataframeOpt {
 	return func(d *Dataframe) error {
 		if len(h) != len(d.Rows[0]) {
-			return &internErrs.HeaderInterpretErr{Provided: h, Found: d.Rows[0]}
+			return &HeaderInterpretErr{Provided: h, Found: d.Rows[0]}
 		}
 
 		for idx, str := range h {
@@ -276,7 +275,7 @@ func (d *Dataframe) Get(row int, columns ...string) (*Dataframe, error) {
 		}
 	}
 	if len(dnew.Columns) != len(columns) {
-		return nil, &internErrs.ColumnsNotFoundErr{
+		return nil, &ColumnsNotFoundErr{
 			Available: d.Header(),
 			Required:  columns,
 		}

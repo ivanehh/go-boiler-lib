@@ -1,4 +1,4 @@
-module github.com/ivanehh/boiler
+module github.com/ivanehh/go-boiler-lib
 
 go 1.24.2
 

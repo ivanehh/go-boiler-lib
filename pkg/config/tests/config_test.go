@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ivanehh/boiler/pkg/config"
+	"github.com/ivanehh/go-boiler-lib/pkg/config"
 )
 
 func TestLoad(t *testing.T) {

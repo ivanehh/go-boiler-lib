@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ivanehh/boiler/pkg/config"
-	"github.com/ivanehh/boiler/pkg/platform/datamanagement/db"
+	"github.com/ivanehh/go-boiler-lib/pkg/config"
+	"github.com/ivanehh/go-boiler-lib/pkg/platform/datamanagement/db"
 )
 
 // TODO: The test are broken; Rewrite them

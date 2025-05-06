@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ivanehh/boiler/pkg/platform/fsops"
+	"github.com/ivanehh/go-boiler-lib/pkg/platform/fsops"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

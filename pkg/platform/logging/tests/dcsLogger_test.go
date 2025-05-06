@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ivanehh/boiler/pkg/platform/logging"
+	"github.com/ivanehh/go-boiler-lib/pkg/platform/logging"
 )
 
 func TestLoggerBasic(t *testing.T) {

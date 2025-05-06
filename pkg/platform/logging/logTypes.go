@@ -3,7 +3,7 @@ package logging
 import (
 	"strconv"
 
-	h "github.com/ivanehh/boiler/internal/helpers"
+	h "github.com/ivanehh/go-boiler-lib/internal/helpers"
 )
 
 type MapableError interface {

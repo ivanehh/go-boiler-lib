@@ -4,9 +4,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ivanehh/boiler/pkg/config"
-	"github.com/ivanehh/boiler/pkg/platform/azure"
-	"github.com/ivanehh/boiler/pkg/platform/logging"
+	"github.com/ivanehh/go-boiler-lib/pkg/config"
+	"github.com/ivanehh/go-boiler-lib/pkg/platform/azure"
+	"github.com/ivanehh/go-boiler-lib/pkg/platform/logging"
 )
 
 // TODO: The test are broken; Rewrite them

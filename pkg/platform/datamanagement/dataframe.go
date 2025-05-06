@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	internErrs "github.com/ivanehh/boiler/internal/errors"
+	internErrs "github.com/ivanehh/go-boiler-lib/internal/errors"
 	"github.com/pbnjay/grate"
 	_ "github.com/pbnjay/grate/simple"
 	_ "github.com/pbnjay/grate/xls"

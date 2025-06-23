@@ -2,7 +2,8 @@
 // Model: Gemini 2.5 Pro
 // Knowledge Cutoff: Most likely 2023 (as standard for many models, though specific date isn't provided by the API)
 // Sources: Standard Go library documentation (net/http, net/url, encoding/json, etc.), general Go programming practices.
-// Note: This code is refactored based on the provided original code and analysis of potential issues.
+// Note: This code has been refactored to simplify client configuration, improve ergonomics,
+// and provide clearer workflows for making HTTP requests.
 package netcom
 
 import (
@@ -21,22 +22,23 @@ import (
 // It allows for request-specific configurations like headers or query parameters.
 type RequestOption func(*http.Request) error
 
-// ClientOption defines a function type for configuring the netcom Client.
-// It allows setting client-wide defaults like base URL, timeout, or underlying http.Client.
-// Options that can fail during configuration should return an error.
-type ClientOption func(*Client) error
+// ClientConfig holds configuration for the netcom Client.
+type ClientConfig struct {
+	BaseURL        string        // Optional base URL for all requests.
+	Timeout        time.Duration // Optional timeout for requests.
+	DefaultHeaders http.Header   // Optional default headers for all requests.
+	// Advanced users can provide their own http.Client.
+	// If nil, a default one will be created (with Timeout if specified).
+	// If HTTPClient is provided, ClientConfig.Timeout is ignored.
+	HTTPClient *http.Client
+}
 
 // Client represents a configurable HTTP client.
 type Client struct {
-	baseURL    *url.URL
-	httpClient *http.Client
-	// Headers set on the client level are applied to every request originating
-	// from this client instance. Request-specific headers can override these.
-	Headers http.Header
+	baseURL        *url.URL
+	httpClient     *http.Client
+	defaultHeaders http.Header // Default headers applied to every request.
 }
-
-// ErrBadOptionConfiguration indicates an error during client configuration.
-var ErrBadOptionConfiguration = errors.New("bad option configuration")
 
 // ErrRequestOptionFailed indicates an error applying a request option.
 var ErrRequestOptionFailed = errors.New("failed to apply request option")
@@ -59,84 +61,76 @@ var ErrReadResponseFailed = errors.New("failed to read response body")
 // ErrBadStatusCode indicates a non-2xx HTTP status code.
 var ErrBadStatusCode = errors.New("request failed with non-2xx status code")
 
-// NewClient creates a new HTTP client with the given options.
-// It returns an error if any ClientOption fails.
-func NewClient(options ...ClientOption) (*Client, error) {
-	// Initialize with a default, non-global http.Client instance.
-	client := &Client{
-		httpClient: &http.Client{},
-		Headers:    make(http.Header),
-	}
+// NewClient creates a new HTTP client with the given configuration.
+func NewClient(config ClientConfig) (*Client, error) {
+	c := &Client{}
 
-	// Apply configuration options.
-	for _, option := range options {
-		if err := option(client); err != nil {
-			// Wrap the error for context.
-			return nil, fmt.Errorf("%w: %v", ErrBadOptionConfiguration, err)
-		}
-	}
-
-	// Ensure httpClient is not nil (e.g., if WithHTTPClient(nil) was somehow called, though prevented now)
-	if client.httpClient == nil {
-		client.httpClient = &http.Client{}
-	}
-
-	return client, nil
-}
-
-// --- Client Options ---
-
-// WithBaseURL sets the base URL for the client.
-// The baseURL string must be a valid absolute URL.
-func WithBaseURL(baseURL string) ClientOption {
-	return func(c *Client) error {
-		u, err := url.Parse(baseURL)
+	if config.BaseURL != "" {
+		u, err := url.Parse(config.BaseURL)
 		if err != nil {
-			return fmt.Errorf("parsing base URL failed: %w", err)
+			return nil, fmt.Errorf("parsing base URL '%s' failed: %w", config.BaseURL, err)
 		}
 		if !u.IsAbs() {
-			return fmt.Errorf("base URL must be absolute: %s", baseURL)
+			return nil, fmt.Errorf("base URL '%s' must be absolute", config.BaseURL)
 		}
 		c.baseURL = u
-		return nil
 	}
+
+	if config.HTTPClient != nil {
+		c.httpClient = config.HTTPClient
+		// If user provides a client, ClientConfig.Timeout is ignored.
+		// The provided client's configuration (including timeout) is used as-is.
+	} else {
+		c.httpClient = &http.Client{}
+		if config.Timeout > 0 {
+			c.httpClient.Timeout = config.Timeout
+		}
+	}
+
+	if config.DefaultHeaders != nil {
+		// Clone to prevent modification of the original map if it's reused.
+		c.defaultHeaders = config.DefaultHeaders.Clone()
+	} else {
+		c.defaultHeaders = make(http.Header) // Ensure it's initialized
+	}
+
+	return c, nil
 }
 
-// WithTimeout sets the timeout for the client's underlying http.Client.
-func WithTimeout(timeout time.Duration) ClientOption {
-	return func(c *Client) error {
-		if c.httpClient == nil {
-			// This case should ideally not happen due to NewClient initialization
-			c.httpClient = &http.Client{}
-		}
-		c.httpClient.Timeout = timeout
+// SetBaseURL updates the base URL for the client.
+// The newBaseURL string must be a valid absolute URL.
+// Passing an empty string will clear the base URL.
+func (c *Client) SetBaseURL(newBaseURL string) error {
+	if newBaseURL == "" {
+		c.baseURL = nil
 		return nil
 	}
+	u, err := url.Parse(newBaseURL)
+	if err != nil {
+		return fmt.Errorf("parsing new base URL failed: %w", err)
+	}
+	if !u.IsAbs() {
+		return fmt.Errorf("new base URL must be absolute: %s", newBaseURL)
+	}
+	c.baseURL = u
+	return nil
 }
 
-// WithHTTPClient sets a custom http.Client for the netcom Client.
-// This allows for advanced configuration (e.g., custom Transport, TLS settings).
-// The provided httpClient must not be nil.
-func WithHTTPClient(httpClient *http.Client) ClientOption {
-	return func(c *Client) error {
-		if httpClient == nil {
-			return errors.New("provided http client cannot be nil")
-		}
-		c.httpClient = httpClient
-		return nil
+// SetDefaultHeader sets a default header, replacing any existing values for the key.
+func (c *Client) SetDefaultHeader(key, value string) {
+	if c.defaultHeaders == nil { // Should be initialized by NewClient
+		c.defaultHeaders = make(http.Header)
 	}
+	c.defaultHeaders.Set(key, value)
 }
 
-// WithClientHeader adds a default header to be sent with every request
-// made by this client instance.
-func WithClientHeader(key, value string) ClientOption {
-	return func(c *Client) error {
-		if c.Headers == nil {
-			c.Headers = make(http.Header)
-		}
-		c.Headers.Add(key, value)
-		return nil
+// AddDefaultHeader adds a default header value. If the header key already exists,
+// it appends the new value to the existing ones.
+func (c *Client) AddDefaultHeader(key, value string) {
+	if c.defaultHeaders == nil { // Should be initialized by NewClient
+		c.defaultHeaders = make(http.Header)
 	}
+	c.defaultHeaders.Add(key, value)
 }
 
 // --- Request Options ---
@@ -159,26 +153,24 @@ func WithHeader(key, value string) RequestOption {
 	}
 }
 
-// ErrBadParameters is used by options when input parameters are invalid.
-var ErrBadParameters = errors.New("bad parameters provided")
-
-// WithQueryParams adds query parameters to the request URL.
-// It expects pairs of strings (key1, value1, key2, value2, ...).
-// Returns an error if an odd number of strings is provided.
-func WithQueryParams(pairs ...string) RequestOption {
+// WithSetHeader sets a header on the request, replacing any existing values for the key.
+func WithSetHeader(key, value string) RequestOption {
 	return func(req *http.Request) error {
-		if len(pairs)%2 != 0 {
-			return fmt.Errorf(
-				"%w: query params require key-value pairs, got %d items",
-				ErrBadParameters,
-				len(pairs),
-			)
-		}
+		req.Header.Set(key, value)
+		return nil
+	}
+}
 
-		q := req.URL.Query()
-		for i := 0; i < len(pairs); i += 2 {
-			// Add allows multiple values for the same key.
-			q.Add(pairs[i], pairs[i+1])
+// WithQueryParams sets query parameters from a map.
+// Existing query parameters with the same keys will be replaced by the values from the map.
+func WithQueryParams(params map[string]string) RequestOption {
+	return func(req *http.Request) error {
+		if len(params) == 0 {
+			return nil
+		}
+		q := req.URL.Query() // Get existing query params to preserve them
+		for k, v := range params {
+			q.Set(k, v) // Set replaces existing values for the key k
 		}
 		req.URL.RawQuery = q.Encode()
 		return nil
@@ -238,13 +230,17 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body io.Re
 	}
 
 	// 1. Apply client-level default headers.
-	for key, values := range c.Headers {
-		for _, value := range values {
-			req.Header.Add(key, value)
+	// These are added first. Request-specific options can then override (using Set)
+	// or add further values (using Add).
+	if c.defaultHeaders != nil {
+		for key, values := range c.defaultHeaders {
+			for _, value := range values {
+				req.Header.Add(key, value)
+			}
 		}
 	}
 
-	// 2. Apply request-specific options (can override client headers).
+	// 2. Apply request-specific options.
 	for _, option := range options {
 		if err := option(req); err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrRequestOptionFailed, err)
@@ -309,20 +305,20 @@ func (c *Client) Post(ctx context.Context, path string, body io.Reader, options 
 	return c.Request(ctx, http.MethodPost, path, body, options...)
 }
 
-// PostJSON sends a POST request with the body marshalled from the data interface{}
+// PostJSON sends a POST request with the body marshalled from the data any
 // as JSON. It automatically sets the "Content-Type" header to "application/json".
-func (c *Client) PostJSON(ctx context.Context, path string, data interface{}, options ...RequestOption) (*http.Response, error) {
+func (c *Client) PostJSON(ctx context.Context, path string, data any, options ...RequestOption) (*http.Response, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrJSONMarshalFailed, err)
 	}
 
 	// Prepend the Content-Type header option. User-provided options later
-	// in the slice can override it if they specifically set Content-Type.
-	jsonOptions := []RequestOption{WithHeader("Content-Type", "application/json")}
-	jsonOptions = append(jsonOptions, options...)
+	// in the slice can override it if they specifically use WithSetHeader for Content-Type.
+	finalOptions := []RequestOption{WithSetHeader("Content-Type", "application/json")}
+	finalOptions = append(finalOptions, options...) // User options come after
 
-	return c.Post(ctx, path, bytes.NewReader(jsonData), jsonOptions...)
+	return c.Post(ctx, path, bytes.NewReader(jsonData), finalOptions...)
 }
 
 // Put sends a PUT request to the specified path with the given body.
@@ -346,7 +342,7 @@ func (c *Client) Patch(ctx context.Context, path string, body io.Reader, options
 // and then decodes the JSON body into the provided value `v`.
 // If `v` is nil, the body is read and discarded (useful for checking success without needing data).
 // Returns ErrBadStatusCode if the status code is outside the 200-299 range.
-func DecodeResponse(resp *http.Response, v interface{}) error {
+func DecodeResponse(resp *http.Response, v any) error {
 	defer resp.Body.Close()
 
 	// Check for non-successful status codes first.
